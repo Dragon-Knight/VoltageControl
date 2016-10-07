@@ -42,7 +42,7 @@ void VoltageControl::AttachCallback(void (*callback)(uint8_t pin, uint8_t voltag
 
 void VoltageControl::Run(bool run)
 {
-	if(this->_run != run) // Иначе, если постоянно дёргать этот метод, то происходит очистка всех таймеров _callback_delaying и callback дергаться постоянно.
+	if(this->_run != run)
 	{
 		this->_run = run;
 		this->_callback_first = true;
