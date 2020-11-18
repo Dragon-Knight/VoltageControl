@@ -8,8 +8,8 @@ Arduino библиотека контроля напряжения.
 Класс является шаблонным и применяет 1 параметр: `uint8_t _id = 0`.
  Первый не обязательный параметр прозрачно передаёт `uint8_t` значение в вызываемые колбеки, что позволяет идентифицировать класс при использовании нескольких экземпляров класса на один колбек. Например пин чтение АЦП:
 ```c
-CrossInteger<A1> Volt1;
-CrossInteger<A2> Volt2;
+VoltageControl<A1> Volt1;
+VoltageControl<A2> Volt2;
 //...
 Volt1.SetRequest(OnRequestVoltage);
 Volt2.SetRequest(OnRequestVoltage);
