@@ -1,69 +1,148 @@
 /*
-	VoltageControl.h - Библиотека для контроля напряжения на аналоговом контакте микроконтроллера.
-	Разработчик: Dragon_Knight => https://vk.com/id5982674 <= 2015г.
-	Версия: 1.0
-	
-	Описание методов:
-		VoltageControl - Конструктор класса, принимает следующие параметры:
-			uint8_t pin - Контакт микроконтроллера. Например: 'A1'
-			float coefficient - Коэффициент пересчёта значения АЦП в Вольты. Например: '0.13469705784574468085106382978724'
-			uint16_t interval - Интервал измерения напряжения, в мс. Например: '1000'
-			uint8_t vmin - Минимальное допустимое напряжение в вольтах умноженное на 10. Например: '114' - равно 11.4 Вольта.
-			uint8_t vmax - Максимальное допустимое напряжение в вольтах умноженное на 10. Например: '146' - равно 14.6 Вольта.
-			Возвращает: Ничего.
-		
-		void AttachCallback - Метод указания ссылки на колбек, принимает следующие параметры:
-			void (*callback)(uint8_t voltage) - Имя функции, которая будет выполнена, если значение напряжения выйдет за рамки vmin и vmax. Например: 'OnVoltageError'.
-			uint32_t interval - (Опционально) Интервал вызова функции, в мс. Т.е. она будет вызываться не чаще указанного интервала. Например: '60000'. Для лучшей работы параметр должен быть кратный интервалу измерения напряжения.
-			Функция должна иметь два параметра: 'uint8_t pin' и 'uint8_t voltage', и ничего не возвращать: 'void'. Например: 'OnVoltageError(uint8_t pin, uint8_t voltage){ }'.
-			Возвращает: Ничего.
-		
-		void Run - Метод запуска или остановки контроля напряжения, принимает следующие параметры:
-			bool run - Параметр запуска или остановки контроля напряжения. Например: 'true'.
-			Возвращает: Ничего.
-		
-		uint8_t GetVoltage - Метод ручного измерения напряжения.
-			Возвращает: Напряжение на контакте микроконтроллера, умноженное на 10. Например: '127' - равно 12.7 Вольта.
-		
-		void Processing - Метод обновления класса. Оптимизирован для работы в 'void loop(){ }'.
-			Возвращает: Ничего.
-		
-		
-		Формула расчёта коэффициента пересчёта значения АЦП и схема подключения резистивного делителя:
-			coefficient = ((Vref / 1024) * ((R1 + R2) / R2)) * 10
-				Vref - Опорное напряжение, в вольтах.
-			
-			(Vin)---[ R1 ]---*---[ R2 ]---(GND)
-							 |
-							 `---(AnalogInput)
+ *	VoltageControl.h
+ *	Voltage Control class
+ *
+ *	@author		Nikolai Tikhonov aka Dragon_Knight <dubki4132@mail.ru>, https://vk.com/globalzone_edev
+ *	@licenses	MIT https://opensource.org/licenses/MIT
+ *	@repo		https://github.com/Dragon-Knight/VoltageControl
 */
 
-#ifndef VoltageControl_h
-#define VoltageControl_h
+#pragma once
 
-#include "Arduino.h"
-
+template<uint8_t _id = 0>
 class VoltageControl
 {
 	public:
-		VoltageControl(uint8_t pin, float coefficient, uint16_t interval, uint8_t vmin, uint8_t vmax);
-		void AttachCallback(void (*callback)(uint8_t pin, uint8_t voltage));
-		void AttachCallback(void (*callback)(uint8_t pin, uint8_t voltage), uint32_t interval);
-		void Run(bool run);
-		uint8_t GetVoltage();
-		void Processing();
+		using request_t = int32_t (*)(uint8_t id);
+		using response_t = void (*)(uint8_t id, int32_t value, int8_t state);
+		
+		VoltageControl()
+		{
+			return;
+		};
+		
+		VoltageControl(request_t callback_req, uint16_t interval_req, response_t callback_res, bool once, uint32_t coefficient, int32_t vmin, int32_t vmax) : _data{callback_req, interval_req, 0, callback_res, once, 0, coefficient, vmin, vmax, false}
+		{
+			return;
+		};
+		
+		// Указать колбэк-функцию запроса напряжения и интервал запроса в мс.
+		void SetRequest(request_t callback, uint16_t interval)
+		{
+			_data.request_callback = callback;
+			_data.request_interval = interval;
+			
+			return;
+		};
+		
+		// Указать колбэк-функцию изменения напряжения и интервал оповещения в мс.
+		void SetResponse(response_t callback, bool once = false)
+		{
+			_data.response_callback = callback;
+			_data.response_once = once;
+			
+			return;
+		};
+		
+		// Указать коэффициент пересчёта АЦП в мВ.
+		void SetCoefficient(uint32_t coefficient)
+		{
+			_data.coefficient = coefficient;
+			
+			Serial.println(coefficient);
+			
+			return;
+		};
+		
+		// Указать минимально допустимое напряжение в мВ.
+		void SetMin(uint32_t vmin)
+		{
+			_data.vmin = vmin;
+			
+			return;
+		};
+		
+		// Указать максимально допустимое напряжение в мВ.
+		void SetMax(uint32_t vmax)
+		{
+			_data.vmax = vmax;
+			
+			return;
+		};
+		
+		// Запустить класс.
+		void SetStart()
+		{
+			_data.active = true;
+			
+			return;
+		};
+		
+		// Остановить класс.
+		void SetStop()
+		{
+			_data.active = false;
+			
+			return;
+		};
+		
+		// Проверить текущее напряжение на нахождение между vmin и vmax.
+		int8_t GetValid()
+		{
+			int32_t voltage = GetVoltage();
+			
+			return ((voltage < _data.vmin) ? -1 : ((voltage > _data.vmax) ? 1 : 0));
+		};
+		
+		// Вернуть текущее напряжение, в мВ.
+		int32_t GetVoltage()
+		{
+			uint32_t raw = _data.request_callback(_id);
+			
+			return (raw * _data.coefficient) / 1000;
+		};
+		
+		// Обработка класса.
+		void Processing(uint32_t currentTime = millis())
+		{
+			if( _data.active == true && (_data.request_time + _data.request_interval) <= currentTime )
+			{
+				int32_t voltage = GetVoltage();
+				int8_t state = ((voltage < _data.vmin) ? -1 : ((voltage > _data.vmax) ? 1 : 0));
+				if( _data.response_once == false || (_data.response_once == true && _data.old_state != state) )
+				{
+					_data.response_callback(_id, voltage, state);
+					
+					_data.old_state = state;
+				}
+				
+				_data.request_time = currentTime;
+			}
+			
+			return;
+		};
+		
+		// Утилита расчёта коэффициента по VRev, R1, R2 и уровню квантования.
+		// PS: Не стоит обращать внимание на тип float. Эта функция полностью просчитывается на этапе компиляции и возвращает тип uint32_t.
+		static inline uint32_t GetCoefficient(float vref, float r1 = 0, float r2 = 1, float quantization = 1024)
+		{
+			return ((vref / quantization) * ((r1 + r2) / r2)) + 0.5;
+		}
+		
 	private:
-		uint8_t _pin;
-		float _coefficient;
-		uint16_t _interval;
-		uint8_t _vmin;
-		uint8_t _vmax;
-		void (*_callback)(uint8_t pin, uint8_t voltage);
-		uint32_t _callback_interval;
-		uint32_t _lastProcessingTime;
-		bool _run = false;
-		uint32_t _callback_delaying = 0;
-		bool _callback_first = true;
+		struct data_t
+		{
+			request_t request_callback;		// Колбэк-функция запроса напряжения.
+			uint16_t request_interval;		// Интервал вызова колбэк-функции запроса напряжения.
+			uint32_t request_time;			// Время последнего запроса напряжения.
+			
+			response_t response_callback;	// Колбэк-функция изменения напряжения.
+			bool response_once;				// Флаг одиночного вызова при изменении состояния напряжения.
+			int8_t old_state;				// Состояние предыдущего измерения. Только при response_once == true
+			
+			uint32_t coefficient;			// Коэффициент пересчёта значения АЦП в мВ.
+			int32_t vmin;					// Минимально допустимое напряжение, в мВ.
+			int32_t vmax;					// Максимально допустимое напряжение, в мВ.
+			bool active;					// Флаг активности класса.
+		} _data;
 };
-
-#endif
