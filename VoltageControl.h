@@ -49,8 +49,6 @@ class VoltageControl
 		{
 			_data.coefficient = coefficient;
 			
-			Serial.println(coefficient);
-			
 			return;
 		};
 		
