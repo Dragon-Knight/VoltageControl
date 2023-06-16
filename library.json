@@ -1,0 +1,10 @@
+{
+  "name": " VoltageControl",
+  "description": "VoltageControl",
+  "version": "1.0.0",
+  "repository":
+  {
+      "type": "git",
+      "url": "https://github.com/Dragon-Knight/VoltageControl.git"
+  }
+}

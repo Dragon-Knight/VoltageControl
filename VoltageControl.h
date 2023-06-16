@@ -103,8 +103,12 @@ class VoltageControl
 		// Обработка класса.
 		void Processing(uint32_t currentTime = millis())
 		{
-			if( _data.active == true && (_data.request_time + _data.request_interval) <= currentTime )
+			if(_data.active == false) return;
+			if(currentTime - _data.request_time < _data.request_interval) return;
+			
 			{
+				_data.request_time = currentTime;
+
 				int32_t voltage = GetVoltage();
 				int8_t state = ((voltage < _data.vmin) ? -1 : ((voltage > _data.vmax) ? 1 : 0));
 				if( _data.response_once == false || (_data.response_once == true && _data.old_state != state) )
@@ -113,8 +117,6 @@ class VoltageControl
 					
 					_data.old_state = state;
 				}
-				
-				_data.request_time = currentTime;
 			}
 			
 			return;
